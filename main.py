@@ -1,10 +1,20 @@
-# main.py
-
 import os
 import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from invoice_generator import generate_invoice
+from PIL import Image, ImageTk
+
+
+import sys
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS  # When packaged by PyInstaller
+    except Exception:
+        base_path = os.path.abspath(".")  # When running normally
+    return os.path.join(base_path, relative_path)
+
 
 DEFAULT_FOLDER = os.path.join(os.path.expanduser("~"), "Desktop", "Invoices")
 selected_folder = DEFAULT_FOLDER
@@ -17,7 +27,8 @@ all_fee_types = [
 used_fee_types = set()
 particular_rows = []
 
-payment_modes = ["Cash", "Credit", "Debit", "UPI", "Netbanking", "Cheque", "Demand Draft"]
+payment_modes = ["Cash", "Credit Card", "Debit Card", "UPI", "Netbanking", "Cheque", "Demand Draft"]
+course_options = ["Day-Care", "Nursery", "Jr. Kg", "Sr. Kg", "Playgroup"]
 
 def update_add_particular_button():
     remaining = [item for item in all_fee_types if item not in used_fee_types]
@@ -27,18 +38,16 @@ def add_dropdown_particular():
     remaining = [item for item in all_fee_types if item not in used_fee_types]
     if not remaining:
         return
-
     selected = remaining[0]
     used_fee_types.add(selected)
     update_add_particular_button()
 
     row_frame = tk.Frame(particulars_frame)
-    row_frame.pack(fill='x', pady=2)
+    row_frame.pack(fill='x', pady=5)
 
-    fee_label = tk.Label(row_frame, text=selected, width=30, anchor='w')
+    fee_label = tk.Label(row_frame, text=selected, width=30, anchor='w' , font=("Arial", 14))
     fee_label.pack(side='left', padx=5)
-
-    amount_entry = tk.Entry(row_frame, width=15)
+    amount_entry = tk.Entry(row_frame, width=15 , font=("Arial", 13))
     amount_entry.pack(side='left', padx=5)
 
     def delete_row():
@@ -47,29 +56,25 @@ def add_dropdown_particular():
         row_frame.destroy()
         update_add_particular_button()
 
-    delete_btn = tk.Button(row_frame, text="Delete", command=delete_row)
-    delete_btn.pack(side='left', padx=5)
-
+    tk.Button(row_frame, text="Delete", command=delete_row, width=10 , font=("Arial", 14)).pack(side='left', padx=5)
     particular_rows.append((row_frame, selected, amount_entry))
 
 def add_custom_particular():
     row_frame = tk.Frame(particulars_frame)
-    row_frame.pack(fill='x', pady=2)
+    row_frame.pack(fill='x', pady=5)
 
-    custom_entry = tk.Entry(row_frame, width=30)
+    custom_entry = tk.Entry(row_frame, width=30 , font=("Arial", 14))
     custom_entry.insert(0, "Custom Fee Name")
     custom_entry.pack(side='left', padx=5)
 
-    amount_entry = tk.Entry(row_frame, width=15)
+    amount_entry = tk.Entry(row_frame, width=15 , font=("Arial", 13))
     amount_entry.pack(side='left', padx=5)
 
     def delete_row():
         particular_rows.remove((row_frame, custom_entry, amount_entry))
         row_frame.destroy()
 
-    delete_btn = tk.Button(row_frame, text="Delete", command=delete_row)
-    delete_btn.pack(side='left', padx=5)
-
+    tk.Button(row_frame, text="Delete", command=delete_row, width=10 , font=("Arial", 14)).pack(side='left', padx=5)
     particular_rows.append((row_frame, custom_entry, amount_entry))
 
 def browse_folder():
@@ -81,7 +86,7 @@ def browse_folder():
 
 def submit_invoice():
     name = name_entry.get().strip()
-    course = course_entry.get().strip()
+    course = course_var.get().strip()
     duration = duration_entry.get().strip()
     date = datetime.datetime.now().strftime("%d-%m-%Y")
     payment_mode = payment_mode_var.get().strip()
@@ -97,7 +102,6 @@ def submit_invoice():
         _, pname_widget, amount_widget = row
         pname = pname_widget if isinstance(pname_widget, str) else pname_widget.get().strip()
         amt = amount_widget.get().strip()
-
         if pname and amt:
             try:
                 amt_float = float(amt)
@@ -131,54 +135,191 @@ def submit_invoice():
 
     messagebox.showinfo("Invoice Generated", f"Invoice saved to:\n{invoice_path}")
 
-# ========== UI ==========
+    
+    # try:
+    #     invoice_path = generate_invoice(...)
+    # except Exception as e:
+    #     messagebox.showerror("Error", f"Failed to generate invoice: {e}")
+
+def delete_last_invoice():
+    if not os.path.exists(selected_folder):
+        messagebox.showinfo("No Invoices", "No invoices have been generated yet.")
+        return
+    files = sorted([f for f in os.listdir(selected_folder) if f.endswith(".pdf")])
+    if not files:
+        messagebox.showinfo("No Invoices", "No invoices found to delete.")
+        return
+    last_invoice = files[-1]
+    confirm = messagebox.askyesno("Delete Invoice", f"Delete {last_invoice}?")
+    if confirm:
+        os.remove(os.path.join(selected_folder, last_invoice))
+        messagebox.showinfo("Deleted", f"{last_invoice} deleted.")
+
+def show_invoices():
+    if not os.path.exists(selected_folder):
+        messagebox.showinfo("No Invoices", "No invoices folder found.")
+        return
+
+    files = sorted([f for f in os.listdir(selected_folder) if f.endswith(".pdf")])
+    if not files:
+        messagebox.showinfo("No Invoices", "No invoices found.")
+        return
+
+    top = tk.Toplevel(app)
+    top.title("Invoices")
+    top.geometry("600x400")
+
+    # Scrollable frame
+    canvas = tk.Canvas(top)
+    scrollbar = tk.Scrollbar(top, orient="vertical", command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas)
+
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
+
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    for f in files:
+        frame = tk.Frame(scrollable_frame, bg="white")
+        frame.pack(fill="x", padx=10, pady=5)
+
+        tk.Label(frame, text=f, width=40, anchor="w").pack(side="left")
+        tk.Button(frame, text="Open", command=lambda p=f: os.startfile(os.path.join(selected_folder, p))).pack(side="left", padx=5)
+        tk.Button(frame, text="Delete", command=lambda p=f: delete_invoice_file(p, top)).pack(side="left", padx=5)
+
+
+def delete_invoice_file(filename, window):
+    path = os.path.join(selected_folder, filename)
+    confirm = messagebox.askyesno("Delete Invoice", f"Are you sure you want to delete {filename}?")
+    if confirm:
+        os.remove(path)
+        window.destroy()
+        show_invoices()
+
+# ====== UI ======
+
+# ====== UI ======
 
 app = tk.Tk()
+
+
 app.title("Little Sky Kids Billing Software")
-app.geometry("700x850")
-app.resizable(False, False)
+app.state('zoomed')  # Fullscreen
+app.configure(bg="#f0f8ff")
 
-tk.Label(app, text="Student Name").pack()
-name_entry = tk.Entry(app, width=50)
-name_entry.pack()
+# Load and display logo
 
-tk.Label(app, text="Course").pack()
-course_entry = tk.Entry(app, width=50)
-course_entry.pack()
 
-tk.Label(app, text="Course Duration").pack()
-duration_entry = tk.Entry(app, width=50)
-duration_entry.pack()
+# === Top Layout: Header and Buttons ===
+top_frame = tk.Frame(app, bg="#f0f8ff")
+top_frame.pack(fill="x", pady=(10, 0))
 
-tk.Label(app, text="Date of Payment (Auto-filled)").pack()
-tk.Label(app, text=datetime.datetime.now().strftime("%d-%m-%Y")).pack()
+# Load and display logo on top-left
+logo_image = Image.open(resource_path("new-logo.png"))
 
-tk.Label(app, text="Fee Particulars").pack(pady=10)
-particulars_frame = tk.Frame(app)
-particulars_frame.pack()
+logo_image = logo_image.resize((60, 60))
+logo_photo = ImageTk.PhotoImage(logo_image)
+tk.Label(top_frame, image=logo_photo, bg="#f0f8ff").pack(side="left", padx=(20, 10))
+app.logo_photo = logo_photo  # keep reference
 
-add_particular_btn = tk.Button(app, text="Add Particular", command=add_dropdown_particular)
-add_particular_btn.pack(pady=5)
+# School name next to logo
+tk.Label(top_frame, text="LITTLE SKY KIDS PRESCHOOL", font=("Arial", 30, "bold"),
+         fg="#003366", bg="#f0f8ff").pack(side="left")
 
-add_custom_btn = tk.Button(app, text="Add Custom Particular", command=add_custom_particular)
-add_custom_btn.pack(pady=5)
+# Right: Action Buttons
+btn_frame = tk.Frame(top_frame, bg="#f0f8ff")
+btn_frame.pack(side="right", padx=30)
 
-tk.Label(app, text="Payment Mode").pack()
+tk.Button(btn_frame, text="Generate Invoice", command=submit_invoice, bg="green", fg="white", width=20 ,font=("Arial", 12) ).pack(side="left", padx=5)
+tk.Button(btn_frame, text="Show Invoices", command=show_invoices, width=20 ,font=("Arial", 12)).pack(side="left", padx=5)
+tk.Button(btn_frame, text="Delete Last Invoice", command=delete_last_invoice, bg="red", fg="white", width=20 ,font=("Arial", 12)).pack(side="left", padx=5)
+# tk.Button(btn_frame, text="Exit", command=app.quit, bg="gray", fg="white", width=20).pack(side="left", padx=5)
+
+# === Main Form Section ===
+# === Scrollable Main Form Section ===
+main_frame = tk.Frame(app, bg="#ffffff", bd=2, relief="ridge")
+main_frame.place(relx=0.5, rely=0.18, anchor="n", relwidth=0.9, relheight=0.75)
+
+canvas = tk.Canvas(main_frame, bg="white", highlightthickness=0)
+scrollbar = tk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+scrollable_frame = tk.Frame(canvas, bg="white")
+
+scrollable_frame.bind(
+    "<Configure>",
+    lambda e: canvas.configure(
+        scrollregion=canvas.bbox("all")
+    )
+)
+
+canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+canvas.configure(yscrollcommand=scrollbar.set)
+
+canvas.pack(side="left", fill="both", expand=True)
+scrollbar.pack(side="right", fill="y")
+
+# Enable mouse wheel scrolling
+def _on_mousewheel(event):
+    canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+form = scrollable_frame
+
+form.grid_columnconfigure(0, weight=1)
+form.grid_columnconfigure(1, weight=1)
+
+
+
+tk.Label(form, text="Student Name", bg="white" , font=("Arial", 14)).grid(row=0, column=0, sticky="e", padx=15, pady=10)
+name_entry = tk.Entry(form, width=60 , font=("Arial", 13))
+name_entry.grid(row=0, column=1, padx=15, pady=10)
+
+tk.Label(form, text="Course", bg="white" , font=("Arial", 14)).grid(row=1, column=0, sticky="e", padx=15, pady=10)
+course_var = tk.StringVar()
+course_combo = ttk.Combobox(form, textvariable=course_var,font=("Arial", 13), values=course_options, state='readonly', width=58)
+course_combo.grid(row=1, column=1, padx=15, pady=10)
+course_combo.set(course_options[0])
+
+tk.Label(form, text="Course Duration", bg="white" , font=("Arial", 14)).grid(row=2, column=0, sticky="e", padx=15, pady=10)
+duration_entry = tk.Entry(form, width=60 , font=("Arial", 13))
+duration_entry.grid(row=2, column=1, padx=15, pady=10)
+
+tk.Label(form, text="Date of Payment", bg="white" , font=("Arial", 14)).grid(row=3, column=0, sticky="e", padx=15, pady=10)
+tk.Label(form, text=datetime.datetime.now().strftime("%d-%m-%Y"), bg="white" , font=("Arial", 14)).grid(row=3, column=1, sticky="w", padx=15)
+
+tk.Label(form, text="Fee Particulars", bg="white", font=("Arial", 15, "bold")).grid(row=4, column=0, columnspan=2, pady=(30, 5))
+
+# Fee particulars frame
+particulars_frame = tk.Frame(form, bg="white" , )
+particulars_frame.grid(row=5, column=0, columnspan=2, pady=5)
+
+add_particular_btn = tk.Button(form, text="Add Particular", font=("Arial", 12) ,command=add_dropdown_particular, width=25)
+add_particular_btn.grid(row=6, column=0, sticky="e", padx=(100, 5), pady=5)
+
+add_custom_btn = tk.Button(form, text="Add Custom Particular", font=("Arial", 12) ,command=add_custom_particular, width=25)
+add_custom_btn.grid(row=6, column=1, sticky="w", padx=(5, 100), pady=5)
+
+tk.Label(form, text="Payment Mode", bg="white",font=("Arial", 14)).grid(row=7, column=0, sticky="e", padx=15, pady=10)
 payment_mode_var = tk.StringVar()
-payment_mode_combo = ttk.Combobox(app, textvariable=payment_mode_var, values=payment_modes, state='readonly', width=30)
-payment_mode_combo.pack()
+payment_mode_combo = ttk.Combobox(form, textvariable=payment_mode_var, font=("Arial", 13) ,values=payment_modes, state='readonly', width=58)
+payment_mode_combo.grid(row=7, column=1, padx=15, pady=10)
 payment_mode_combo.set(payment_modes[0])
 
-tk.Label(app, text="Balance (if any)").pack()
-balance_entry = tk.Entry(app, width=50)
-balance_entry.pack()
+tk.Label(form, text="Balance (if any)", bg="white" , font=("Arial", 14)).grid(row=8, column=0, sticky="e", padx=15, pady=10)
+balance_entry = tk.Entry(form, width=60 , font=("Arial", 13))
+balance_entry.grid(row=8, column=1, padx=15, pady=10)
 
-tk.Label(app, text="Invoice Save Folder:").pack(pady=(20, 5))
-folder_path_label = tk.Label(app, text=selected_folder, fg="blue", wraplength=600)
-folder_path_label.pack()
-tk.Button(app, text="Browse Folder", command=browse_folder).pack(pady=5)
+tk.Label(form, text="Invoice Save Folder", bg="white" , font=("Arial", 14)).grid(row=9, column=0, sticky="e", padx=15, pady=10)
+folder_path_label = tk.Label(form, text=selected_folder, fg="blue", bg="white", wraplength=600, anchor="w", justify="left")
+folder_path_label.grid(row=9, column=1, sticky="w", padx=15)
 
-tk.Button(app, text="Generate Invoice", command=submit_invoice, bg="green", fg="white").pack(pady=20)
+tk.Button(form, text="Browse Folder", command=browse_folder, width=25 , font=("Arial", 14)).grid(row=9, column=1, sticky="e", pady=10)
 
 update_add_particular_button()
 app.mainloop()

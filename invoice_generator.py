@@ -1,32 +1,45 @@
-# invoice_generator.py
-
 import os
+import sys
 from fpdf import FPDF
 from datetime import datetime
 
-COUNTER_FILE = "data/invoice_counter.txt"
+# PyInstaller-friendly path resolution
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+COUNTER_FILE = resource_path("invoice_counter.txt")
 
 def get_next_invoice_number():
-    os.makedirs("data", exist_ok=True)
+    os.makedirs(os.path.dirname(COUNTER_FILE), exist_ok=True)
+
+    year_suffix = datetime.now().strftime("%y")
+
     if not os.path.exists(COUNTER_FILE):
         with open(COUNTER_FILE, "w") as f:
             f.write("1")
-        return "LSK001"
+        return f"LSK{year_suffix}-00001"
 
     with open(COUNTER_FILE, "r+") as f:
         content = f.read().strip()
-        if not content.isdigit():
+
+        if not content.isdigit() or int(content) < 1:
             f.seek(0)
             f.write("1")
             f.truncate()
-            return "LSK001"
+            return f"LSK{year_suffix}-00001"
 
         current = int(content)
         next_num = current + 1
+
         f.seek(0)
         f.write(str(next_num))
         f.truncate()
-        return f"LSK{next_num:03d}"
+
+        return f"LSK{year_suffix}-{next_num:05d}"
 
 def generate_invoice(student_name, course, duration, date, particulars, total, payment_mode, balance, save_folder):
     invoice_no = get_next_invoice_number()
@@ -35,7 +48,13 @@ def generate_invoice(student_name, course, duration, date, particulars, total, p
 
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
+
+    logo_path = resource_path("new-logo.png")
+    if os.path.exists(logo_path):
+        pdf.image(logo_path, x=10, y=10, w=30)
+    pdf.ln(20)
+
+    pdf.set_auto_page_break(auto=True, margin=25)
 
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "LITTLE SKY KIDS", ln=True, align="C")
@@ -78,8 +97,9 @@ def generate_invoice(student_name, course, duration, date, particulars, total, p
     pdf.cell(0, 10, f"Balance (if any): {balance:.2f}", ln=True)
 
     pdf.ln(20)
-    pdf.cell(0, 10, "Sign & Stamp (Principal)", ln=False)
-    pdf.cell(0, 10, "Sign (Parent/Guardian)", ln=True, align="R")
+    pdf.set_font("Arial", "I", 10)
+    pdf.set_text_color(100)
+    pdf.cell(0, 10, "This is a computer-generated receipt. No signature is required.", 0, 0, "C")
 
     pdf.output(filename)
     return filename
