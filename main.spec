@@ -5,7 +5,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('new-logo.png', '.'), ('invoice_counter.txt', '.')],
+    datas=[('new-logo.png', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
